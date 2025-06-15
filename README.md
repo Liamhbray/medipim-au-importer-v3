@@ -81,22 +81,22 @@ Execute migrations in sequence via Supabase SQL Editor:
 
 ```sql
 -- 1. Core system setup
-\i supabase/migrations/20250615080000_complete_medipim_system.sql
+\i supabase/migrations/20250615100000_complete_medipim_system.sql
 
 -- 2. Database functions
-\i supabase/migrations/20250615080001_database_functions.sql
+\i supabase/migrations/20250615100001_database_functions.sql
 
 -- 3. Sync functions
-\i supabase/migrations/20250615080002_sync_functions.sql
+\i supabase/migrations/20250615100002_sync_functions.sql
 
 -- 4. Processing functions
-\i supabase/migrations/20250615080003_processing_functions.sql
+\i supabase/migrations/20250615100003_processing_functions.sql
 
 -- 5. Security policies
-\i supabase/migrations/20250615080004_security_policies.sql
+\i supabase/migrations/20250615100004_security_policies.sql
 
 -- 6. Cron jobs
-\i supabase/migrations/20250615080005_cron_jobs.sql
+\i supabase/migrations/20250615100005_cron_jobs.sql
 ```
 
 ### 3. Verification
@@ -123,12 +123,12 @@ LIMIT 10;
 └── supabase/
     ├── config.toml                    # Supabase configuration
     ├── migrations/                    # Database deployment scripts
-    │   ├── 20250615080000_complete_medipim_system.sql
-    │   ├── 20250615080001_database_functions.sql
-    │   ├── 20250615080002_sync_functions.sql
-    │   ├── 20250615080003_processing_functions.sql
-    │   ├── 20250615080004_security_policies.sql
-    │   └── 20250615080005_cron_jobs.sql
+    │   ├── 20250615100000_complete_medipim_system.sql
+    │   ├── 20250615100001_database_functions.sql
+    │   ├── 20250615100002_sync_functions.sql
+    │   ├── 20250615100003_processing_functions.sql
+    │   ├── 20250615100004_security_policies.sql
+    │   └── 20250615100005_cron_jobs.sql
     └── types/
         └── database.types.ts          # Generated TypeScript types
 ```
