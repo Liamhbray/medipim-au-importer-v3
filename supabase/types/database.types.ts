@@ -456,12 +456,58 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      sync_dashboard: {
+        Row: {
+          current_page: number | null
+          entity_type: string | null
+          items_synced: number | null
+          last_sync_at: string | null
+          last_sync_status: string | null
+          minutes_since_last_sync: number | null
+        }
+        Insert: {
+          current_page?: number | null
+          entity_type?: string | null
+          items_synced?: number | null
+          last_sync_at?: never
+          last_sync_status?: string | null
+          minutes_since_last_sync?: never
+        }
+        Update: {
+          current_page?: number | null
+          entity_type?: string | null
+          items_synced?: number | null
+          last_sync_at?: never
+          last_sync_status?: string | null
+          minutes_since_last_sync?: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
       build_medipim_request_body: {
         Args: { task_data: Json }
         Returns: Json
+      }
+      clear_response_backlog: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      enhanced_process_sync_task: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      fast_api_processor: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      insert_products_from_response: {
+        Args: { api_response: Json; request_id: number }
+        Returns: number
+      }
+      instant_response_processor: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       pgmq_send: {
         Args: { queue_name: string; message: Json }
@@ -481,7 +527,11 @@ export type Database = {
       }
       process_sync_tasks_batch: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
+        Returns: string
+      }
+      queue_products_aggressively: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       queue_sync_tasks: {
         Args: Record<PropertyKey, never>
@@ -499,6 +549,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      reset_stuck_syncs: {
+        Args: { hours_threshold?: number }
+        Returns: {
+          entity_type: string
+          was_stuck: boolean
+        }[]
+      }
+      smart_sync_requester: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       store_entity_data: {
         Args: { entity_type: string; item_data: Json }
         Returns: undefined
@@ -507,12 +568,26 @@ export type Database = {
         Args: { product_id: string; product_data: Json }
         Returns: undefined
       }
-      update_sync_progress: {
-        Args: {
+      test_entity_sorting_formats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
           entity_type: string
-          completed_page: number
-          has_more_pages: boolean
-        }
+          simple_format_works: boolean
+          nested_format_works: boolean
+        }[]
+      }
+      test_single_entity_request: {
+        Args: { entity_type_param: string; use_nested_format?: boolean }
+        Returns: number
+      }
+      update_sync_progress: {
+        Args:
+          | {
+              entity_type: string
+              completed_page: number
+              has_more_pages: boolean
+            }
+          | { request_id: number; api_response: Json }
         Returns: undefined
       }
     }
