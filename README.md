@@ -80,11 +80,11 @@ cp .env.example .env
 Execute migration via Supabase SQL Editor:
 
 ```sql
--- Production sync verification (idempotent)
-\i supabase/migrations/20250615120000_production_sync_verification.sql
+-- Git sync marker (minimal verification)
+\i supabase/migrations/20250615130000_git_sync_marker.sql
 ```
 
-**Note**: This migration is designed to work with existing production environments. It uses only idempotent operations to verify the Git repository matches the current production state.
+**Note**: This migration adds a simple marker to confirm Git repository synchronization with production. The complete database schema and functions already exist in production.
 
 ### 3. Verification
 ```sql
@@ -110,7 +110,7 @@ LIMIT 10;
 └── supabase/
     ├── config.toml                    # Supabase configuration
     ├── migrations/                    # Database deployment scripts
-    │   └── 20250615120000_production_sync_verification.sql
+    │   └── 20250615130000_git_sync_marker.sql
     └── types/
         └── database.types.ts          # Generated TypeScript types
 ```
