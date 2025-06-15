@@ -3,6 +3,8 @@
 ## Project Overview
 MediPim Australia Importer v3 - A Supabase-based system for importing and synchronizing medical product data from MediPim's Australian database.
 
+**Last Updated**: 2025-06-15 - Repository connected to Supabase for automated deployments
+
 ## Supabase Project Details
 - **Project ID**: aggmcawyfbmzrdmojhab
 - **Project Name**: medipim-au-sync
