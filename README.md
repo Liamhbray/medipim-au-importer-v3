@@ -77,27 +77,14 @@ cp .env.example .env
 ```
 
 ### 2. Database Deployment
-Execute migrations in sequence via Supabase SQL Editor:
+Execute migration via Supabase SQL Editor:
 
 ```sql
--- 1. Core system setup
-\i supabase/migrations/20250615100000_complete_medipim_system.sql
-
--- 2. Database functions
-\i supabase/migrations/20250615100001_database_functions.sql
-
--- 3. Sync functions
-\i supabase/migrations/20250615100002_sync_functions.sql
-
--- 4. Processing functions
-\i supabase/migrations/20250615100003_processing_functions.sql
-
--- 5. Security policies
-\i supabase/migrations/20250615100004_security_policies.sql
-
--- 6. Cron jobs
-\i supabase/migrations/20250615100005_cron_jobs.sql
+-- Production sync verification (idempotent)
+\i supabase/migrations/20250615120000_production_sync_verification.sql
 ```
+
+**Note**: This migration is designed to work with existing production environments. It uses only idempotent operations to verify the Git repository matches the current production state.
 
 ### 3. Verification
 ```sql
@@ -123,12 +110,7 @@ LIMIT 10;
 └── supabase/
     ├── config.toml                    # Supabase configuration
     ├── migrations/                    # Database deployment scripts
-    │   ├── 20250615100000_complete_medipim_system.sql
-    │   ├── 20250615100001_database_functions.sql
-    │   ├── 20250615100002_sync_functions.sql
-    │   ├── 20250615100003_processing_functions.sql
-    │   ├── 20250615100004_security_policies.sql
-    │   └── 20250615100005_cron_jobs.sql
+    │   └── 20250615120000_production_sync_verification.sql
     └── types/
         └── database.types.ts          # Generated TypeScript types
 ```

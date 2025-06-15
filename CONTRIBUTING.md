@@ -62,7 +62,7 @@ supabase gen types typescript --local > supabase/types/database.types.ts
 ```
 
 #### 2. Function Changes
-Update existing migration files (20250615100001-20250615100003) or create new migration:
+Since all functions already exist in production, create new migration for changes:
 
 ```sql
 -- Always use CREATE OR REPLACE FUNCTION
