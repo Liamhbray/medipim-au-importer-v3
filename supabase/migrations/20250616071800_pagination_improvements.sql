@@ -4,27 +4,108 @@
 -- - Implements required page parameter for products/media queries  
 -- - Adds support for configurable page sizes (10, 50, 100, 250)
 -- - Handles 10,000 result limit with automatic stream fallback
+-- 
+-- FULLY IDEMPOTENT: Safe to run multiple times
 
--- Update sync_state table to track pagination method
-ALTER TABLE sync_state 
-ADD COLUMN IF NOT EXISTS pagination_method TEXT DEFAULT 'query',
-ADD COLUMN IF NOT EXISTS page_size INTEGER DEFAULT 100,
-ADD COLUMN IF NOT EXISTS max_results_limit INTEGER DEFAULT 10000;
+-- Ensure extensions exist (idempotent)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+        CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_net') THEN
+        CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
+    END IF;
+    
+    -- Create pgmq schema if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgmq') THEN
+        CREATE SCHEMA "pgmq";
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq') THEN
+        CREATE EXTENSION IF NOT EXISTS "pgmq" WITH SCHEMA "pgmq";
+    END IF;
+END $$;
 
--- Update sync_state records with appropriate pagination methods
-UPDATE sync_state 
-SET pagination_method = CASE 
-  WHEN entity_type IN ('products', 'media') THEN 'stream'
-  ELSE 'query'
-END,
-page_size = CASE 
-  WHEN entity_type IN ('products', 'media') THEN 250  -- Larger pages for efficiency
-  ELSE 100
-END,
-max_results_limit = CASE 
-  WHEN entity_type IN ('products', 'media') THEN 10000
-  ELSE NULL  -- No limit for other entities
-END;
+-- Ensure sync_state table exists with all required columns
+CREATE TABLE IF NOT EXISTS sync_state (
+    id SERIAL PRIMARY KEY,
+    entity_type TEXT UNIQUE NOT NULL,
+    last_sync_timestamp BIGINT DEFAULT 0,
+    last_sync_status TEXT DEFAULT 'pending',
+    sync_count INTEGER DEFAULT 0,
+    current_page INTEGER DEFAULT 0,
+    chunk_status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add new pagination columns if they don't exist (idempotent)
+DO $$ 
+BEGIN
+    -- Add pagination_method column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'pagination_method') THEN
+        ALTER TABLE sync_state ADD COLUMN pagination_method TEXT DEFAULT 'query';
+        
+        -- Add constraint after column creation
+        ALTER TABLE sync_state ADD CONSTRAINT sync_state_pagination_method_check 
+        CHECK (pagination_method IN ('query', 'stream'));
+    END IF;
+    
+    -- Add page_size column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'page_size') THEN
+        ALTER TABLE sync_state ADD COLUMN page_size INTEGER DEFAULT 100;
+        
+        -- Add constraint after column creation
+        ALTER TABLE sync_state ADD CONSTRAINT sync_state_page_size_check 
+        CHECK (page_size IN (10, 50, 100, 250));
+    END IF;
+    
+    -- Add max_results_limit column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'max_results_limit') THEN
+        ALTER TABLE sync_state ADD COLUMN max_results_limit INTEGER DEFAULT 10000;
+    END IF;
+END $$;
+
+-- Ensure sync_errors table exists (idempotent)
+CREATE TABLE IF NOT EXISTS sync_errors (
+    id SERIAL PRIMARY KEY,
+    sync_type TEXT NOT NULL,
+    error_message TEXT,
+    error_data JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create PGMQ queue if it doesn't exist (idempotent)
+DO $$
+BEGIN
+    -- Check if queue exists by trying to inspect it
+    BEGIN
+        PERFORM pgmq.metrics('medipim_sync_tasks');
+    EXCEPTION WHEN others THEN
+        -- Queue doesn't exist, create it
+        PERFORM pgmq.create_queue('medipim_sync_tasks');
+    END;
+END $$;
+
+-- Initialize sync_state records with appropriate pagination methods (idempotent)
+INSERT INTO sync_state (entity_type, pagination_method, page_size, max_results_limit) VALUES
+('products', 'stream', 250, 10000),      -- Use stream for large datasets
+('media', 'stream', 250, 10000),         -- Use stream for large datasets  
+('organizations', 'query', 100, NULL),   -- Use query for smaller datasets
+('brands', 'query', 100, NULL),
+('public_categories', 'query', 100, NULL),
+('product_families', 'query', 100, NULL),
+('active_ingredients', 'query', 100, NULL)
+ON CONFLICT (entity_type) DO UPDATE SET
+    pagination_method = EXCLUDED.pagination_method,
+    page_size = EXCLUDED.page_size,
+    max_results_limit = EXCLUDED.max_results_limit,
+    updated_at = NOW();
 
 -- Enhanced request body builder with pagination method support
 CREATE OR REPLACE FUNCTION build_medipim_request_body(task_data JSONB) 
@@ -503,7 +584,72 @@ BEGIN
 END;
 $$;
 
--- Comment on migration
-COMMENT ON COLUMN sync_state.pagination_method IS 'Pagination method: query (paginated) or stream (all results)';
-COMMENT ON COLUMN sync_state.page_size IS 'Page size for query method: 10, 50, 100, or 250';
-COMMENT ON COLUMN sync_state.max_results_limit IS 'Maximum results before switching to stream method';
+-- Add comments on columns (idempotent)
+DO $$
+BEGIN
+    -- Add comments only if columns exist (safety check)
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'sync_state' AND column_name = 'pagination_method') THEN
+        COMMENT ON COLUMN sync_state.pagination_method IS 'Pagination method: query (paginated) or stream (all results)';
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'sync_state' AND column_name = 'page_size') THEN
+        COMMENT ON COLUMN sync_state.page_size IS 'Page size for query method: 10, 50, 100, or 250';
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'sync_state' AND column_name = 'max_results_limit') THEN
+        COMMENT ON COLUMN sync_state.max_results_limit IS 'Maximum results before switching to stream method';
+    END IF;
+END $$;
+
+-- Ensure function ownership is set correctly (idempotent)
+DO $$
+DECLARE
+    func_name TEXT;
+BEGIN
+    -- List of functions to update ownership for
+    FOR func_name IN 
+        SELECT routine_name 
+        FROM information_schema.routines 
+        WHERE routine_schema = 'public' 
+        AND routine_name IN (
+            'build_medipim_request_body',
+            'process_sync_tasks_batch', 
+            'instant_response_processor',
+            'update_sync_progress',
+            'initialize_sync_bootstrap'
+        )
+    LOOP
+        EXECUTE format('ALTER FUNCTION public.%I OWNER TO postgres', func_name);
+    END LOOP;
+END $$;
+
+-- Final migration validation (idempotent)
+DO $$
+BEGIN
+    -- Verify all required columns exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'pagination_method') THEN
+        RAISE EXCEPTION 'Migration validation failed: pagination_method column missing';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'page_size') THEN
+        RAISE EXCEPTION 'Migration validation failed: page_size column missing';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'sync_state' AND column_name = 'max_results_limit') THEN
+        RAISE EXCEPTION 'Migration validation failed: max_results_limit column missing';
+    END IF;
+    
+    -- Verify functions exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.routines 
+                   WHERE routine_schema = 'public' AND routine_name = 'build_medipim_request_body') THEN
+        RAISE EXCEPTION 'Migration validation failed: build_medipim_request_body function missing';
+    END IF;
+    
+    RAISE NOTICE 'Migration validation passed: All pagination improvements applied successfully';
+END $$;
